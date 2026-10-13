@@ -11,14 +11,17 @@ import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
 import pg from 'pg';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const { Pool } = pg;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
 
-const PORT = process?.env?.API_BACKEND_PORT || 5000;
-const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "127.0.0.1";
+const PORT = process?.env?.PORT || process?.env?.API_BACKEND_PORT || 5000;
+const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "0.0.0.0";
 const DATABASE_URL = process?.env?.DATABASE_URL;
 
 if (!DATABASE_URL) {
@@ -625,8 +628,19 @@ app.post('/api-proxy', async (req, res) => {
   }
 });
 
+// Serve the Vite production build so Render can host the frontend and API
+// together under one origin.
+const frontendDist = path.resolve(__dirname, '../frontend/dist');
+app.use(express.static(frontendDist));
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api') && req.accepts('html')) {
+    return res.sendFile(path.join(frontendDist, 'index.html'));
+  }
+  next();
+});
+
 const server = app.listen(PORT, API_BACKEND_HOST, () => {
-  console.log(`Vertex AI Backend listening at http://localhost:${PORT}`);
+  console.log(`Arise app listening at http://${API_BACKEND_HOST}:${PORT}`);
 });
 
 
