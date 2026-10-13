@@ -608,10 +608,6 @@ export default function App() {
           admins={admins}
           currentStaffId={activeStaffId}
           onAuthenticated={handleAdminAuthenticated}
-          onContinueAsGuestProjector={() => {
-            setIsAuthenticated(true);
-            setView('projector');
-          }}
         />
       )}
 
