@@ -79,6 +79,8 @@ export default function App() {
   const [showAiHype, setShowAiHype] = useState<boolean>(false);
 
   const localActionTimestamp = useRef<number>(0);
+  const lastCloudUpdateTimestamp = useRef<number>(0);
+  const hasHydratedFromCloud = useRef<boolean>(false);
 
   // Save to local device storage as fallback
   useEffect(() => {
@@ -160,6 +162,11 @@ export default function App() {
     }
   }, [attendees, teams, logs, admins, activeStaff.name]);
 
+  const handleReestablishCloudDataRef = useRef(handleReestablishCloudData);
+  useEffect(() => {
+    handleReestablishCloudDataRef.current = handleReestablishCloudData;
+  }, [handleReestablishCloudData]);
+
   // Realtime Neon PostgreSQL listener across all phones
   useEffect(() => {
     let unsubscribeDatabase: (() => void) | null = null;
@@ -170,6 +177,15 @@ export default function App() {
 
         unsubscribeDatabase = neonService.subscribeToLiveConvention(
           (cloudData: ConventionCloudData) => {
+            const snapshotTimestamp = cloudData.updatedAt || 0;
+            if (snapshotTimestamp <= lastCloudUpdateTimestamp.current) {
+              return;
+            }
+
+            const isInitialSnapshot = !hasHydratedFromCloud.current;
+            hasHydratedFromCloud.current = true;
+            lastCloudUpdateTimestamp.current = snapshotTimestamp;
+
             const mySessionId = getDeviceSessionId();
             const isFromOtherDevice = cloudData.sourceSessionId !== mySessionId;
             const timeSinceLocalAction = Date.now() - localActionTimestamp.current;
@@ -183,7 +199,7 @@ export default function App() {
                 setAdmins(cloudData.admins);
               }
 
-              if (isFromOtherDevice) {
+              if (isFromOtherDevice && !isInitialSnapshot) {
                 audioService.playNfcTap();
                 setLiveSyncToast(
                   cloudData.actionSummary ||
@@ -210,7 +226,7 @@ export default function App() {
           },
           () => {
             // Cloud document does not exist yet; auto-seed it with the current state
-            handleReestablishCloudData();
+            void handleReestablishCloudDataRef.current();
           }
         );
       } catch (err: unknown) {
@@ -230,7 +246,7 @@ export default function App() {
         unsubscribeDatabase();
       }
     };
-  }, [activeStaff.name, handleReestablishCloudData]);
+  }, []);
 
   // Master broadcast function: writes to Neon and the local mesh simultaneously
   const broadcastMeshUpdate = useCallback(

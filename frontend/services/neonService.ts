@@ -53,7 +53,7 @@ export const neonService = {
     const events = new EventSource('/api/convention-state/events');
 
     const deliver = (state: ConventionCloudData) => {
-      if (!stopped && state.updatedAt !== lastDeliveredAt) {
+      if (!stopped && state.updatedAt > lastDeliveredAt) {
         lastDeliveredAt = state.updatedAt;
         onData(state);
       }
