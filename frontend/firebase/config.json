@@ -1,0 +1,13 @@
+{
+  "webAppConfig": {
+    "projectId": "eloquent-region-509115-t2",
+    "appId": "1:379459071154:web:bfa0287617e2756da36dab",
+    "apiKey": "AIzaSyCc2t3f4eXvteyQBPKcGA0g6t8ktCQsyIk",
+    "authDomain": "eloquent-region-509115-t2.firebaseapp.com",
+    "storageBucket": "eloquent-region-509115-t2.firebasestorage.app",
+    "databaseURL": "https://eloquent-region-509115-t2-default-rtdb.firebaseio.com",
+    "messagingSenderId": "379459071154",
+    "measurementId": "G-CJC7BJQPMP"
+  },
+  "databaseId": "app-builder-376a90c8"
+}
