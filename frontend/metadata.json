@@ -1,4 +1,4 @@
 {
   "name": "NFC ConPoint - Convention Point Tracking & Group Tally",
-  "description": "Real-time convention point tracking and group tally system synced across all staff devices with Firebase Cloud Firestore."
+  "description": "Real-time convention point tracking and group tally system synced across all staff devices with Neon PostgreSQL."
 }

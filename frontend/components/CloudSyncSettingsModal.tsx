@@ -13,10 +13,10 @@ import {
   HelpCircle,
   Smartphone,
   Terminal,
-  ExternalLink
+  ExternalLink,
+  Globe
 } from 'lucide-react';
-import firebaseConfig from '../firebase/config.json';
-import { firebaseService } from '../services/firebaseService';
+import { neonService } from '../services/neonService';
 import { audioService } from '../services/audioService';
 
 interface CloudSyncSettingsModalProps {
@@ -67,18 +67,11 @@ export const CloudSyncSettingsModal: React.FC<CloudSyncSettingsModalProps> = ({
   const serviceName = 'genai-app-nfcconpoint-conventionpoi-1-17914263709';
   const directCloudRunUrl = `https://${serviceName}-379459071154.us-south1.run.app`;
 
-  const FIRESTORE_RULES_SNIPPET = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      // Allow read and write for convention staff with active authenticated sessions
-      allow read, write: if request.auth != null;
-    }
-  }
-}`;
+  const DATABASE_CONFIG_SNIPPET = `# Backend environment only — never expose this in frontend code
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require`;
 
   const handleCopyRules = () => {
-    copySafe(FIRESTORE_RULES_SNIPPET);
+    copySafe(DATABASE_CONFIG_SNIPPET);
     setCopiedRule(true);
     setTimeout(() => setCopiedRule(false), 2000);
   };
@@ -101,22 +94,18 @@ service cloud.firestore {
     setTestResult(null);
 
     try {
-      const user = await firebaseService.initAuth();
+      await neonService.testConnection();
       await onSyncNow();
       audioService.playPointSuccess(10);
       setTestResult({
         success: true,
-        message: `Connected to Cloud Firestore! Authenticated session active (UID: ${
-          user ? user.uid.slice(0, 8) : 'active'
-        }...). Project: ${firebaseConfig.webAppConfig.projectId}. Database: ${
-          firebaseConfig.databaseId
-        }. Real-time synchronization active on service ${serviceName}.`
+        message: `Connected to Neon PostgreSQL. Real-time synchronization is active on service ${serviceName}.`
       });
     } catch (err: unknown) {
       audioService.playNfcTap();
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to connect to Firebase.'
+        message: err instanceof Error ? err.message : 'Failed to connect to Neon.'
       });
     } finally {
       setTesting(false);
@@ -133,7 +122,7 @@ service cloud.firestore {
               <Cloud className="w-5 h-5 text-white animate-pulse" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base">Firebase Cloud Firestore Live Synchronization</h3>
+              <h3 className="font-bold text-white text-base">Neon PostgreSQL Live Synchronization</h3>
               <p className="text-xs text-slate-400 font-mono">Service: {serviceName}</p>
             </div>
           </div>
@@ -185,11 +174,11 @@ service cloud.firestore {
                   <Server className="w-4 h-4 text-emerald-400" /> Real-time Synchronized Cloud Database
                 </span>
                 <p className="text-slate-400">
-                  This deployment is linked to Firestore database <strong className="text-indigo-400 font-mono">{firebaseConfig.databaseId}</strong> on project <strong className="text-white font-mono">{firebaseConfig.webAppConfig.projectId}</strong>. Every admin smartphone accessing service <code className="text-emerald-300 font-mono">{serviceName}</code> sees real-time updates as NFC tags are scanned.
+                  This deployment stores shared convention state in Neon PostgreSQL through the Node backend. Every admin smartphone accessing service <code className="text-emerald-300 font-mono">{serviceName}</code> sees live updates as NFC tags are scanned.
                 </p>
               </div>
 
-              {/* Linked Firebase Config Summary */}
+              {/* Linked database summary */}
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5 font-mono text-[11px]">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-slate-400">
                   <span>Parameter</span>
@@ -200,12 +189,12 @@ service cloud.firestore {
                   <span className="text-emerald-400 font-bold truncate max-w-[280px]">{serviceName}</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span className="text-slate-400">Project ID:</span>
-                  <span className="text-indigo-400 font-bold">{firebaseConfig.webAppConfig.projectId}</span>
+                  <span className="text-slate-400">Provider:</span>
+                  <span className="text-indigo-400 font-bold">Neon</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span className="text-slate-400">Database ID:</span>
-                  <span className="text-emerald-400 font-bold">{firebaseConfig.databaseId}</span>
+                  <span className="text-slate-400">Database:</span>
+                  <span className="text-emerald-400 font-bold">PostgreSQL</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
                   <span className="text-slate-400">Active Staff Session:</span>
@@ -229,7 +218,7 @@ service cloud.firestore {
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  Open this URL on all staff phones. Every phone establishes an authenticated session and updates simultaneously.
+                  Open this URL on all staff phones. Every phone connects to the same backend and updates simultaneously.
                 </p>
               </div>
 
@@ -256,7 +245,7 @@ service cloud.firestore {
               {/* Actions */}
               <div className="flex items-center justify-between pt-2">
                 <span className="text-slate-400 text-[11px]">
-                  Real-time updates delivered via Cloud Firestore WebSocket listeners.
+                  Live updates are delivered by the backend with automatic polling fallback.
                 </span>
                 <button
                   type="button"
@@ -308,23 +297,23 @@ service cloud.firestore {
             <div className="space-y-4 animate-fadeIn">
               <div className="bg-emerald-950/50 border border-emerald-500/40 rounded-2xl p-4 text-emerald-200 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-sm text-emerald-300">
-                  <ShieldCheck className="w-4 h-4" /> Firestore Security Rules Active
+                  <ShieldCheck className="w-4 h-4" /> Server-side Database Credentials
                 </div>
                 <p className="text-xs text-emerald-200/90 leading-relaxed">
-                  Your Firestore rules in <code className="bg-slate-900 px-1 rounded">firebase/firestore.rules</code> are configured to <code className="bg-slate-900 px-1 rounded">allow read, write: if request.auth != null;</code>. The app signs in each device anonymously on startup to satisfy this rule automatically.
+                  The Neon connection string is read only by the Node backend from <code className="bg-slate-900 px-1 rounded">DATABASE_URL</code>. It is never included in the browser bundle.
                 </p>
               </div>
 
               {/* Code Snippet Box */}
               <div className="relative bg-slate-950 rounded-2xl border border-emerald-500/40 p-4 font-mono text-[11px] text-emerald-400 overflow-x-auto shadow-inner">
-                <pre>{FIRESTORE_RULES_SNIPPET}</pre>
+                <pre>{DATABASE_CONFIG_SNIPPET}</pre>
                 <button
                   type="button"
                   onClick={handleCopyRules}
                   className="absolute top-3 right-3 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow"
                 >
                   {copiedRule ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedRule ? 'Copied Rules!' : 'Copy Rules'}</span>
+                  <span>{copiedRule ? 'Copied!' : 'Copy Example'}</span>
                 </button>
               </div>
             </div>

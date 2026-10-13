@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Radio, RefreshCw, Check, Copy, X, Globe, QrCode, ExternalLink, Smartphone } from 'lucide-react';
-import firebaseConfig from '../firebase/config.json';
 
 interface SyncHubModalProps {
   attendeesCount: number;
@@ -100,7 +99,7 @@ export const SyncHubModal: React.FC<SyncHubModalProps> = ({
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <span>Firestore Cloud Live Sync Active</span>
+                <span>Neon PostgreSQL Live Sync Active</span>
                 <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono px-1.5 py-0.5 rounded">
                   Live
                 </span>

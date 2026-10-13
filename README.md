@@ -41,9 +41,11 @@ The variables set in `backend/.env.local` are:
 *   `API_PAYLOAD_MAX_SIZE`: The maximum size of the request payload accepted by the backend server (e.g., `5mb`).
 *   `GOOGLE_CLOUD_LOCATION`: The Google Cloud region associated with your project.
 *   `GOOGLE_CLOUD_PROJECT`: Your Google Cloud Project ID.
+*   `DATABASE_URL`: The server-side Neon PostgreSQL connection string used for live convention state.
 
 **Note:** These variables are automatically populated during the download process.
 You can modify the values in `backend/.env.local` if you need to change them.
+Never expose `DATABASE_URL` in frontend code or commit `.env.local`.
 
 ## Installation and Running the App
 

@@ -10,12 +10,42 @@ import { GoogleAuth } from 'google-auth-library';
 import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
+import pg from 'pg';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const { Pool } = pg;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
 
-const PORT = process?.env?.API_BACKEND_PORT || 5000;
-const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "127.0.0.1";
+const PORT = process?.env?.PORT || process?.env?.API_BACKEND_PORT || 5000;
+const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "0.0.0.0";
+const DATABASE_URL = process?.env?.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error("Error: Environment variable DATABASE_URL must be set.");
+  process.exit(1);
+}
+
+const database = new Pool({
+  connectionString: DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
+});
+
+await database.query(`
+  CREATE TABLE IF NOT EXISTS convention_state (
+    id TEXT PRIMARY KEY,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_updated_by TEXT NOT NULL DEFAULT 'System',
+    source_session_id TEXT NOT NULL DEFAULT '',
+    action_summary TEXT NOT NULL DEFAULT '',
+    updated_at BIGINT NOT NULL
+  )
+`);
 
 const GOOGLE_CLOUD_LOCATION = process?.env?.GOOGLE_CLOUD_LOCATION;
 const GOOGLE_CLOUD_PROJECT = process?.env?.GOOGLE_CLOUD_PROJECT;
@@ -46,6 +76,107 @@ const proxyLimiter = rateLimit({
 });
 // Apply the rate limiter to the /api-proxy route before the main proxy logic
 app.use('/api-proxy', proxyLimiter);
+
+const stateSubscribers = new Set();
+
+function sendStateEvent(res, state) {
+  res.write(`event: state\ndata: ${JSON.stringify(state)}\n\n`);
+}
+
+function rowToConventionState(row) {
+  return {
+    ...(row.payload || {}),
+    lastUpdatedBy: row.last_updated_by,
+    sourceSessionId: row.source_session_id,
+    actionSummary: row.action_summary,
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+async function readConventionState() {
+  const result = await database.query(
+    `SELECT payload, last_updated_by, source_session_id, action_summary, updated_at
+     FROM convention_state
+     WHERE id = 'live_data'`
+  );
+  return result.rowCount ? rowToConventionState(result.rows[0]) : null;
+}
+
+app.get('/api/convention-state', async (_req, res) => {
+  try {
+    const state = await readConventionState();
+    if (!state) return res.status(404).json({ error: 'Convention state has not been initialized.' });
+    res.json(state);
+  } catch (error) {
+    console.error('[Neon] Failed to read convention state:', error);
+    res.status(500).json({ error: 'Failed to read convention state.' });
+  }
+});
+
+app.put('/api/convention-state', async (req, res) => {
+  const {
+    attendees,
+    teams,
+    logs,
+    admins,
+    adminName = 'Staff Admin',
+    sourceSessionId = '',
+    actionSummary = '',
+  } = req.body || {};
+
+  if (!Array.isArray(attendees) || !teams || typeof teams !== 'object' || !Array.isArray(logs) || !Array.isArray(admins)) {
+    return res.status(400).json({ error: 'Invalid convention state payload.' });
+  }
+
+  const updatedAt = Date.now();
+  const payload = { attendees, teams, logs: logs.slice(0, 150), admins };
+
+  try {
+    const result = await database.query(
+      `INSERT INTO convention_state
+        (id, payload, last_updated_by, source_session_id, action_summary, updated_at)
+       VALUES ('live_data', $1::jsonb, $2, $3, $4, $5)
+       ON CONFLICT (id) DO UPDATE SET
+         payload = EXCLUDED.payload,
+         last_updated_by = EXCLUDED.last_updated_by,
+         source_session_id = EXCLUDED.source_session_id,
+         action_summary = EXCLUDED.action_summary,
+         updated_at = EXCLUDED.updated_at
+       RETURNING payload, last_updated_by, source_session_id, action_summary, updated_at`,
+      [JSON.stringify(payload), adminName, sourceSessionId, actionSummary, updatedAt]
+    );
+
+    const state = rowToConventionState(result.rows[0]);
+    stateSubscribers.forEach((subscriber) => sendStateEvent(subscriber, state));
+    res.json(state);
+  } catch (error) {
+    console.error('[Neon] Failed to save convention state:', error);
+    res.status(500).json({ error: 'Failed to save convention state.' });
+  }
+});
+
+app.get('/api/convention-state/events', async (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+  });
+  res.flushHeaders();
+  stateSubscribers.add(res);
+
+  try {
+    const state = await readConventionState();
+    if (state) sendStateEvent(res, state);
+  } catch (error) {
+    res.write(`event: error\ndata: ${JSON.stringify({ error: 'Failed to read convention state.' })}\n\n`);
+  }
+
+  const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 20_000);
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    stateSubscribers.delete(res);
+  });
+});
 
 const API_CLIENT_MAP = [
  {
@@ -497,8 +628,19 @@ app.post('/api-proxy', async (req, res) => {
   }
 });
 
+// Serve the Vite production build so Render can host the frontend and API
+// together under one origin.
+const frontendDist = path.resolve(__dirname, '../frontend/dist');
+app.use(express.static(frontendDist));
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api') && req.accepts('html')) {
+    return res.sendFile(path.join(frontendDist, 'index.html'));
+  }
+  next();
+});
+
 const server = app.listen(PORT, API_BACKEND_HOST, () => {
-  console.log(`Vertex AI Backend listening at http://localhost:${PORT}`);
+  console.log(`Arise app listening at http://${API_BACKEND_HOST}:${PORT}`);
 });
 
 
