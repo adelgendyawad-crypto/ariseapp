@@ -273,7 +273,7 @@ export const ManageAdminsView: React.FC<ManageAdminsViewProps> = ({
               Do we need both?
             </div>
             <p className="text-slate-200 leading-relaxed">
-              <strong className="text-white">No, you do NOT need both.</strong> They are two separate deployments of the same project. Since both connect to the same linked Firebase Firestore database (<code className="text-indigo-300 font-mono">app-builder-376a90c8</code>), scores and attendees sync between them, but keeping both costs extra container resources and creates two separate URLs.
+              <strong className="text-white">No, you do NOT need both.</strong> They are two separate deployments of the same project. Since both connect to the same Neon PostgreSQL database through the backend, scores and attendees sync between them, but keeping both costs extra container resources and creates two separate URLs.
             </p>
             <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-emerald-500/20 text-[11px]">
               <span className="text-slate-300">

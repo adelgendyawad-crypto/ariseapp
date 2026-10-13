@@ -9,13 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "latest",
+    "framer-motion": "latest",
+    "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
-    "recharts": "latest",
-    "framer-motion": "latest",
-    "@google/genai": "latest",
-    "firebase": "latest"
+    "recharts": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

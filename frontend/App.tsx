@@ -3,7 +3,7 @@ import { Attendee, PointTransaction, AppView, Team, AdminStaff, SyncPayload } fr
 import { audioService } from './services/audioService';
 import { storageService } from './services/storageService';
 import { syncService } from './services/syncService';
-import { firebaseService, ConventionCloudData, getDeviceSessionId } from './services/firebaseService';
+import { neonService, ConventionCloudData, getDeviceSessionId } from './services/neonService';
 import { NfcScannerModal } from './components/NfcScannerModal';
 import { RegisterNewTagModal } from './components/RegisterNewTagModal';
 import { NfcScannerView } from './components/NfcScannerView';
@@ -17,7 +17,6 @@ import { AiCommentaryModal } from './components/AiCommentaryModal';
 import { AdminAuthModal } from './components/AdminAuthModal';
 import { SyncHubModal } from './components/SyncHubModal';
 import { CloudSyncSettingsModal } from './components/CloudSyncSettingsModal';
-import firebaseConfig from './firebase/config.json';
 import {
   Radio,
   Trophy,
@@ -39,17 +38,17 @@ import {
 export default function App() {
   const [view, setView] = useState<AppView>('dashboard');
 
-  // Groups/Teams State (Real-time Firestore Synced across all phones)
+  // Groups/Teams state (real-time Neon sync across all phones)
   const [teams, setTeams] = useState<Record<string, Team>>(() => storageService.loadTeams());
 
-  // Attendees State (Real-time Firestore Synced across all phones)
+  // Attendees state (real-time Neon sync across all phones)
   const [attendees, setAttendees] = useState<Attendee[]>(() => storageService.loadAttendees());
 
-  // Admin Staff State (Real-time Firestore Synced across all phones)
+  // Admin staff state (real-time Neon sync across all phones)
   const [admins, setAdmins] = useState<AdminStaff[]>(() => storageService.loadAdmins());
   const [activeStaffId, setActiveStaffId] = useState<string>(() => storageService.getActiveStaffId());
 
-  // Transaction Logs State (Real-time Firestore Synced across all phones)
+  // Transaction logs state (real-time Neon sync across all phones)
   const [logs, setLogs] = useState<PointTransaction[]>(() => storageService.loadLogs());
 
   // Admin Security Gate State: Mandatory selection of admin account + PIN
@@ -62,8 +61,8 @@ export default function App() {
   const [showSyncHub, setShowSyncHub] = useState<boolean>(false);
   const [showCloudSettings, setShowCloudSettings] = useState<boolean>(false);
 
-  // Firestore Realtime Connection Status
-  const [firebaseStatus, setFirebaseStatus] = useState<{
+  // Neon PostgreSQL realtime connection status
+  const [databaseStatus, setDatabaseStatus] = useState<{
     status: 'connecting' | 'connected' | 'error';
     lastSyncedAt: number | null;
     errorMessage: string | null;
@@ -132,10 +131,10 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Re-establish Firebase Cloud Data with current local state
+  // Re-establish Neon cloud data with current local state
   const handleReestablishCloudData = useCallback(async () => {
-    setFirebaseStatus((prev) => ({ ...prev, status: 'connecting', errorMessage: null }));
-    const result = await firebaseService.reinitializeCloudDatabase({
+    setDatabaseStatus((prev) => ({ ...prev, status: 'connecting', errorMessage: null }));
+    const result = await neonService.reinitializeCloudDatabase({
       attendees,
       teams,
       logs,
@@ -144,16 +143,16 @@ export default function App() {
     });
 
     if (result.success) {
-      setFirebaseStatus({
+      setDatabaseStatus({
         status: 'connected',
         lastSyncedAt: Date.now(),
         errorMessage: null,
         lastUpdatedBy: activeStaff.name
       });
-      setLiveSyncToast('Firebase Cloud Database Connected & Synced!');
+      setLiveSyncToast('Neon PostgreSQL Connected & Synced!');
       setTimeout(() => setLiveSyncToast(null), 4000);
     } else {
-      setFirebaseStatus({
+      setDatabaseStatus({
         status: 'error',
         lastSyncedAt: null,
         errorMessage: result.error || 'Failed to re-establish'
@@ -161,18 +160,15 @@ export default function App() {
     }
   }, [attendees, teams, logs, admins, activeStaff.name]);
 
-  // Realtime Firebase Cloud Firestore onSnapshot Listener across ALL phones
+  // Realtime Neon PostgreSQL listener across all phones
   useEffect(() => {
-    let unsubscribeFirestore: (() => void) | null = null;
+    let unsubscribeDatabase: (() => void) | null = null;
 
-    async function setupFirebase() {
+    async function setupDatabase() {
       try {
-        setFirebaseStatus((prev) => ({ ...prev, status: 'connecting' }));
-        // Establish anonymous authentication session required by rules
-        await firebaseService.initAuth();
+        setDatabaseStatus((prev) => ({ ...prev, status: 'connecting' }));
 
-        // Subscribe to live Firestore document using onSnapshot
-        unsubscribeFirestore = firebaseService.subscribeToLiveConvention(
+        unsubscribeDatabase = neonService.subscribeToLiveConvention(
           (cloudData: ConventionCloudData) => {
             const mySessionId = getDeviceSessionId();
             const isFromOtherDevice = cloudData.sourceSessionId !== mySessionId;
@@ -197,7 +193,7 @@ export default function App() {
               }
             }
 
-            setFirebaseStatus({
+            setDatabaseStatus({
               status: 'connected',
               lastSyncedAt: cloudData.updatedAt || Date.now(),
               errorMessage: null,
@@ -205,8 +201,8 @@ export default function App() {
             });
           },
           (err) => {
-            console.error('Firebase realtime subscription error:', err);
-            setFirebaseStatus({
+            console.error('Neon realtime subscription error:', err);
+            setDatabaseStatus({
               status: 'error',
               lastSyncedAt: null,
               errorMessage: err.message
@@ -218,25 +214,25 @@ export default function App() {
           }
         );
       } catch (err: unknown) {
-        console.error('Firebase Auth / Init Error:', err);
-        setFirebaseStatus({
+        console.error('Neon database initialization error:', err);
+        setDatabaseStatus({
           status: 'error',
           lastSyncedAt: null,
-          errorMessage: err instanceof Error ? err.message : 'Auth error'
+          errorMessage: err instanceof Error ? err.message : 'Database connection error'
         });
       }
     }
 
-    setupFirebase();
+    setupDatabase();
 
     return () => {
-      if (unsubscribeFirestore) {
-        unsubscribeFirestore();
+      if (unsubscribeDatabase) {
+        unsubscribeDatabase();
       }
     };
   }, [activeStaff.name, handleReestablishCloudData]);
 
-  // Master Broadcast function: writes to Firestore and local mesh simultaneously
+  // Master broadcast function: writes to Neon and the local mesh simultaneously
   const broadcastMeshUpdate = useCallback(
     (actionSummary: string, newAttendees = attendees, newTeams = teams, newLogs = logs, newAdmins = admins) => {
       localActionTimestamp.current = Date.now();
@@ -253,8 +249,8 @@ export default function App() {
         admins: newAdmins
       });
 
-      // 2. Publish to Firebase Firestore Cloud Database so all other phones update immediately
-      firebaseService
+      // 2. Publish to Neon PostgreSQL so all other phones update immediately
+      neonService
         .publishLiveConvention({
           attendees: newAttendees,
           teams: newTeams,
@@ -265,14 +261,14 @@ export default function App() {
         })
         .then((res) => {
           if (res.success) {
-            setFirebaseStatus({
+            setDatabaseStatus({
               status: 'connected',
               lastSyncedAt: Date.now(),
               errorMessage: null,
               lastUpdatedBy: activeStaff.name
             });
           } else {
-            setFirebaseStatus((prev) => ({
+            setDatabaseStatus((prev) => ({
               ...prev,
               status: 'error',
               errorMessage: res.error || 'Failed to sync to cloud'
@@ -626,26 +622,26 @@ export default function App() {
               <button
                 onClick={() => setShowCloudSettings(true)}
                 className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 transition ${
-                  firebaseStatus.status === 'connected'
+                  databaseStatus.status === 'connected'
                     ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : firebaseStatus.status === 'error'
+                    : databaseStatus.status === 'error'
                     ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
                     : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
                 }`}
-                title="Firebase Cloud Firestore Status (Click for details)"
+                title="Neon PostgreSQL Status (Click for details)"
               >
                 <Cloud className="w-3 h-3" />
                 <span>
-                  {firebaseStatus.status === 'connected'
-                    ? 'Firestore Live Synced'
-                    : firebaseStatus.status === 'connecting'
+                  {databaseStatus.status === 'connected'
+                    ? 'Neon Live Synced'
+                    : databaseStatus.status === 'connecting'
                     ? 'Connecting...'
                     : 'Cloud Notice (Click)'}
                 </span>
               </button>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
-              {attendees.length} Attendees • {Object.keys(teams).length} Groups • Real-Time Firestore Sync Across All Phones
+              {attendees.length} Attendees • {Object.keys(teams).length} Groups • Real-Time Neon Sync Across All Phones
             </p>
           </div>
         </div>
@@ -667,14 +663,14 @@ export default function App() {
           <button
             onClick={() => setShowCloudSettings(true)}
             className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition ${
-              firebaseStatus.status === 'connected'
+              databaseStatus.status === 'connected'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
             }`}
             title="Cloud Server Database Sync"
           >
             <Cloud className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden md:inline">Firestore Hub</span>
+            <span className="hidden md:inline">Neon Hub</span>
           </button>
 
           {/* Quick NFC Scanner Tab Jump */}
@@ -725,12 +721,12 @@ export default function App() {
       </header>
 
       {/* Re-establish notification if disconnected or document missing */}
-      {firebaseStatus.status === 'error' && (
+      {databaseStatus.status === 'error' && (
         <div className="bg-amber-950/80 border-b border-amber-500/50 px-4 py-2.5 text-xs text-amber-200 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              <strong>Firestore Real-Time Status:</strong> {firebaseStatus.errorMessage || 'Cloud document is unavailable or was deleted.'}
+              <strong>Neon Real-Time Status:</strong> {databaseStatus.errorMessage || 'Cloud data is unavailable.'}
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -768,7 +764,7 @@ export default function App() {
             onClick={() => setShowCloudSettings(true)}
             className="text-emerald-400 hover:underline flex items-center gap-1"
           >
-            <Wifi className="w-3 h-3" /> Cloud Database: {firebaseConfig.databaseId}
+            <Wifi className="w-3 h-3" /> Cloud Database: Neon PostgreSQL
           </button>
         </div>
       </div>
