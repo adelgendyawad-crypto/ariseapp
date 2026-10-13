@@ -3,10 +3,6 @@ node_modules/
 .DS_Store
 
 # Local secrets
-.env
-.env.local
-**/.env
-**/.env.local
 
 # Build output
 dist/
