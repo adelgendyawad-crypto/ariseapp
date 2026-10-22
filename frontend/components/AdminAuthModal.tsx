@@ -9,9 +9,7 @@ import {
   Sparkles,
   UserCheck,
   ChevronRight,
-  AlertCircle,
-  Zap,
-  ArrowRight
+  AlertCircle
 } from 'lucide-react';
 import { audioService } from '../services/audioService';
 
@@ -19,14 +17,12 @@ interface AdminAuthModalProps {
   admins: AdminStaff[];
   currentStaffId: string;
   onAuthenticated: (admin: AdminStaff) => void;
-  onContinueAsGuestProjector?: () => void;
 }
 
 export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
   admins,
   currentStaffId,
-  onAuthenticated,
-  onContinueAsGuestProjector
+  onAuthenticated
 }) => {
   const [selectedAdminId, setSelectedAdminId] = useState<string>(
     admins.find((a) => a.id === currentStaffId)?.id || admins[0]?.id || 'STAFF-01'
@@ -57,21 +53,14 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
     if (e) e.preventDefault();
     if (!selectedAdmin) return;
 
-    if (pinInput === selectedAdmin.pin || !selectedAdmin.pin || pinInput === '1234') {
+    if (selectedAdmin.pin && pinInput === selectedAdmin.pin) {
       audioService.playPointSuccess(10);
       onAuthenticated(selectedAdmin);
     } else {
       audioService.playNfcTap();
-      setErrorMsg(`Incorrect PIN. (Default PIN is ${selectedAdmin.pin || '1234'})`);
+      setErrorMsg('Incorrect PIN. Please try again.');
       setPinInput('');
     }
-  };
-
-  // Instant one-click quick entry for testing and deployment
-  const handleInstantBypass = () => {
-    if (!selectedAdmin) return;
-    audioService.playPointSuccess(10);
-    onAuthenticated(selectedAdmin);
   };
 
   return (
@@ -145,18 +134,8 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
             })}
           </div>
 
-          {/* Bottom Guest / Stage Display link */}
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
-            <span>Stage Audience Screen?</span>
-            {onContinueAsGuestProjector && (
-              <button
-                type="button"
-                onClick={onContinueAsGuestProjector}
-                className="text-amber-400 hover:text-amber-300 font-semibold underline flex items-center gap-1"
-              >
-                Launch Stage Projector View
-              </button>
-            )}
+          <div className="pt-2 border-t border-slate-800/80 text-xs text-slate-500">
+            A valid staff PIN is required to unlock this terminal.
           </div>
         </div>
 
@@ -186,13 +165,6 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                     <p className="text-xs text-slate-400">{selectedAdmin.role}</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleInstantBypass}
-                  className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow"
-                >
-                  <Zap className="w-3.5 h-3.5 text-amber-300" /> Quick Enter
-                </button>
               </div>
             )}
 
@@ -265,16 +237,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
             >
               <Check className="w-5 h-5" /> Confirm Access & Unlock Terminal
             </button>
-            <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
-              <span>Default PIN: <strong className="text-slate-400">{selectedAdmin?.pin || '1234'}</strong></span>
-              <button
-                type="button"
-                onClick={handleInstantBypass}
-                className="text-indigo-400 hover:underline flex items-center gap-0.5"
-              >
-                Bypass PIN <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
+            <p className="text-center text-[11px] text-slate-500">Enter the PIN assigned to the selected staff account.</p>
           </div>
         </div>
       </div>
