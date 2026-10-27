@@ -50,6 +50,7 @@ export const neonService = {
     let stopped = false;
     let missingReported = false;
     let lastDeliveredAt = 0;
+    let pollTimer: number | null = null;
     const events = new EventSource('/api/convention-state/events');
 
     const deliver = (state: ConventionCloudData) => {
@@ -68,11 +69,6 @@ export const neonService = {
       }
     });
 
-    events.onerror = () => {
-      if (!stopped) onError(new Error('Live database connection interrupted. Retrying…'));
-    };
-
-    // Polling also picks up writes handled by another backend instance.
     const poll = async () => {
       try {
         const state = await requestState();
@@ -89,13 +85,40 @@ export const neonService = {
       }
     };
 
-    void poll();
-    const pollTimer = window.setInterval(poll, 3000);
+    const stopFallbackPolling = () => {
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
+    const startFallbackPolling = () => {
+      if (pollTimer !== null || stopped) return;
+      void poll();
+      pollTimer = window.setInterval(poll, 60_000);
+    };
+
+    events.addEventListener('missing', () => {
+      if (!stopped && !missingReported) {
+        missingReported = true;
+        onDocumentMissing?.();
+      }
+    });
+
+    events.onopen = () => {
+      stopFallbackPolling();
+    };
+
+    events.onerror = () => {
+      if (stopped) return;
+      onError(new Error('Live database connection interrupted. Retrying…'));
+      startFallbackPolling();
+    };
 
     return () => {
       stopped = true;
       events.close();
-      window.clearInterval(pollTimer);
+      stopFallbackPolling();
     };
   },
 

@@ -31,7 +31,7 @@ if (!DATABASE_URL) {
 
 const database = new Pool({
   connectionString: DATABASE_URL,
-  max: 10,
+  max: 2,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,
 });
@@ -142,11 +142,11 @@ app.put('/api/convention-state', async (req, res) => {
          source_session_id = EXCLUDED.source_session_id,
          action_summary = EXCLUDED.action_summary,
          updated_at = EXCLUDED.updated_at
-       RETURNING payload, last_updated_by, source_session_id, action_summary, updated_at`,
+       RETURNING last_updated_by, source_session_id, action_summary, updated_at`,
       [JSON.stringify(payload), adminName, sourceSessionId, actionSummary, updatedAt]
     );
 
-    const state = rowToConventionState(result.rows[0]);
+    const state = rowToConventionState({ ...result.rows[0], payload });
     stateSubscribers.forEach((subscriber) => sendStateEvent(subscriber, state));
     res.json(state);
   } catch (error) {
@@ -166,7 +166,11 @@ app.get('/api/convention-state/events', async (req, res) => {
 
   try {
     const state = await readConventionState();
-    if (state) sendStateEvent(res, state);
+    if (state) {
+      sendStateEvent(res, state);
+    } else {
+      res.write('event: missing\ndata: {}\n\n');
+    }
   } catch (error) {
     res.write(`event: error\ndata: ${JSON.stringify({ error: 'Failed to read convention state.' })}\n\n`);
   }
