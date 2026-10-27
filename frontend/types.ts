@@ -44,7 +44,7 @@ export interface PointTransaction {
   note?: string;
 }
 
-export type PointOption = 1 | 3 | 5 | 10 | 20;
+export type PointOption = 2 | 5 | 10 | 15 | 20;
 
 export interface NfcScanResult {
   serialNumber?: string;

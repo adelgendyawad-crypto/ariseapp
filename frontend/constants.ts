@@ -1,6 +1,6 @@
 import { Team, Attendee, AdminStaff, PointOption } from './types';
 
-export const POINT_OPTIONS: PointOption[] = [1, 3, 5, 10, 20];
+export const POINT_OPTIONS: PointOption[] = [2, 5, 10, 15, 20];
 
 export const STORAGE_KEYS = {
   ATTENDEES: 'conpoint_attendees_v4',
@@ -26,14 +26,11 @@ export const INITIAL_ADMINS: AdminStaff[] = [
 ];
 
 export const ACTIVITIES = [
-  'Main Stage Keynote Attendance',
-  'Workshop Hands-On Demo',
-  'Ping-Pong Tournament Round',
-  'Trivia Quiz Answer',
-  'Costume / Cosplay Spirit',
-  'Volunteer Good Deed',
-  'Booth Passport Stamp',
-  'Lightning Challenge Round'
+  'Attendance',
+  'Participation',
+  'Indoor/Outdoor Games',
+  'Good Deed',
+  'Workshop contribution'
 ];
 
 export const DEFAULT_FALLBACK_TEAM: Team = {

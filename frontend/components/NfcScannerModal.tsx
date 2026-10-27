@@ -115,7 +115,7 @@ export const NfcScannerModal: React.FC<NfcScannerModalProps> = ({
               <span className="text-xs text-indigo-300 font-medium">Quick 5 Tally Options</span>
             </div>
 
-            {/* The 5 Key Point Options: +1, +3, +5, +10, +20 */}
+            {/* The 5 Key Point Options: +2, +5, +10, +15, +20 */}
             <div className="grid grid-cols-5 gap-2">
               {POINT_OPTIONS.map((val) => {
                 const isSelected = selectedPoints === val;
